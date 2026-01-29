@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+kernelsense/main.py
+kernelsense/shell.py
+kernelsense.egg-info/PKG-INFO
+kernelsense.egg-info/SOURCES.txt
+kernelsense.egg-info/dependency_links.txt
+kernelsense.egg-info/entry_points.txt
+kernelsense.egg-info/top_level.txt
