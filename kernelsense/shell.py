@@ -6,6 +6,13 @@ import os
 from kernelsense.llm.gemini import GeminiClient
 from kernelsense.parser.command_parser import parse_gemini_response, CommandParseError
 
+from kernelsense.safety.validator import validate_command
+from kernelsense.explain.explainer import explain_command
+
+from kernelsense.executor import execute_command
+from kernelsense.config import load_config
+from kernelsense.history import log_command
+
 HISTORY_FILE = os.path.expanduser("~/.kernelsense_history")
 
 
@@ -13,6 +20,7 @@ class KernelSenseShell:
     def __init__(self):
         self.session = PromptSession(history=FileHistory(HISTORY_FILE))
         self.gemini = GeminiClient()
+        self.config = load_config()
 
     def run(self):
         print("KernelSense Shell started.")
@@ -43,21 +51,50 @@ class KernelSenseShell:
         try:
             raw = self.gemini.generate_command(user_input)
             parsed = parse_gemini_response(raw)
-            self.show_suggestions(parsed)
+            self.choose_and_validate(parsed)
+
+        except TimeoutError:
+            print("⚠ Model is taking too long to respond. Please try again.")
+
         except CommandParseError as e:
-            print(f"⚠ Gemini error: {e}")
-        except Exception as e:
-            print(f"⚠ Unexpected error: {e}")
+            print(f"⚠ Unable to understand Model response: {e}")
 
-    def show_suggestions(self, data: dict):
-        print("\nSuggested Commands:")
-        print(f"1) {data['primary_command']}")
+        except Exception:
+            print("⚠ Something went wrong while processing your request.")
 
-        for i, alt in enumerate(data["alternatives"], start=2):
-            print(f"{i}) {alt}")
+    def choose_and_validate(self, data: dict):
+        command = data["primary_command"]
 
-        print(f"\nRisk Level: {data['risk_level']}")
-        print(f"Explanation: {data['explanation']}\n")
+        print(f"\nCommand : {command}")
+
+        # 🔒 Safety validation
+        result = validate_command(command)
+
+        if result.status == "block":
+            print("\n🚫 This command is blocked and cannot be executed.")
+            print(f"Reason: {result.reason}")
+            return
+
+        # 📖 Explain?
+        if self.config["auto_explain"]:
+            print("\nCommand Explanation:")
+            print(explain_command(command))
+        else:
+            explain = input("Explain this command? (y/n): ").strip().lower()
+            if explain == "y":
+                print("\nCommand Explanation:")
+                print(explain_command(command))
+
+        # ▶ Confirm execution
+        confirm = input("\nRun this command? (y/n): ").strip().lower()
+        if confirm != "y":
+            print("Command execution cancelled.")
+            return
+
+        # ▶ Execute
+        print("Output :")
+        execute_command(command)
+        log_command(data["intent"], command)
 
 
 def start_shell():
