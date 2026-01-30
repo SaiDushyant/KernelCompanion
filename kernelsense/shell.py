@@ -3,12 +3,16 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.formatted_text import HTML
 import os
 
+from kernelsense.llm.gemini import GeminiClient
+from kernelsense.parser.command_parser import parse_gemini_response, CommandParseError
+
 HISTORY_FILE = os.path.expanduser("~/.kernelsense_history")
 
 
 class KernelSenseShell:
     def __init__(self):
         self.session = PromptSession(history=FileHistory(HISTORY_FILE))
+        self.gemini = GeminiClient()
 
     def run(self):
         print("KernelSense Shell started.")
@@ -27,18 +31,34 @@ class KernelSenseShell:
                     print("Exiting KernelSense.")
                     break
 
-                # Phase 1 behavior: echo input
-                print(f"You typed: {user_input}")
+                self.handle_intent(user_input)
 
             except KeyboardInterrupt:
-                # Ctrl+C → don’t exit shell
-                print("\n(Interrupted — press Ctrl+D or type 'exit' to quit)")
+                print("\n(Interrupted — Ctrl+D or 'exit' to quit)")
             except EOFError:
-                # Ctrl+D → exit shell
                 print("\nExiting KernelSense.")
                 break
 
+    def handle_intent(self, user_input: str):
+        try:
+            raw = self.gemini.generate_command(user_input)
+            parsed = parse_gemini_response(raw)
+            self.show_suggestions(parsed)
+        except CommandParseError as e:
+            print(f"⚠ Gemini error: {e}")
+        except Exception as e:
+            print(f"⚠ Unexpected error: {e}")
+
+    def show_suggestions(self, data: dict):
+        print("\nSuggested Commands:")
+        print(f"1) {data['primary_command']}")
+
+        for i, alt in enumerate(data["alternatives"], start=2):
+            print(f"{i}) {alt}")
+
+        print(f"\nRisk Level: {data['risk_level']}")
+        print(f"Explanation: {data['explanation']}\n")
+
 
 def start_shell():
-    shell = KernelSenseShell()
-    shell.run()
+    KernelSenseShell().run()
