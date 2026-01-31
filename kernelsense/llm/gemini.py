@@ -2,6 +2,9 @@ import os
 from dotenv import load_dotenv
 from google import genai
 
+from kernelsense.os_detect import detect_os
+
+
 load_dotenv()
 
 GEMINI_MODEL = "models/gemini-2.5-flash"
@@ -16,6 +19,9 @@ class GeminiClient:
         self.client = genai.Client(api_key=api_key)
 
     def generate_command(self, user_input: str, os_name: str = "Linux") -> str:
+
+        os_name = detect_os()
+
         prompt = f"""
 You are a Linux command generation engine.
 
